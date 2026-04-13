@@ -1,0 +1,102 @@
+from fastapi import FastAPI, Query
+
+from app.tasks.backfill import backfill_ohlcv_task
+from app.database.database import init_db
+from app.forms import OHLCVResponse, BackfillResponse, OHLCVCandle, BackfillRequest
+from datetime import datetime
+from celery.result import AsyncResult
+from app.celery_app import celery
+
+init_db()
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"health": "OK"}
+
+@app.get("/ohlcv", response_model=OHLCVResponse)
+async def get_ohlcv(
+        start_time: str = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
+        end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
+        exchange: str = Query(..., description="Exchange name (e.g., binance, kraken)"),
+        symbol: str = Query(..., description="Trading symbol (e.g., BTC/USDT)"),
+) -> OHLCVResponse:
+    """
+    Retrieve OHLCV data for a given symbol and time range.
+
+    Query Parameters:
+    - start_timestamp: ISO 8601 datetime string for data start (e.g., 2024-01-01T00:00:00Z)
+    - end_timestamp: ISO 8601 datetime string for data end (e.g., 2024-01-02T00:00:00Z)
+    - exchange: Exchange identifier (binance, kraken, coinbase, etc.)
+    - symbol: Trading pair symbol (BTC/USDT, ETH/USDC, etc.)
+
+    Returns OHLCV candle data for the requested period.
+    """
+
+    # Parse ISO 8601 timestamps
+    start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
+    end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
+    return OHLCVResponse(
+        status="success",
+        exchange=exchange,
+        symbol=symbol,
+        start_timestamp=start_dt,
+        end_timestamp=end_dt,
+        data=[
+            OHLCVCandle(
+                timestamp=int(start_dt.timestamp()),
+                open=45000.00,
+                high=45500.00,
+                low=44800.00,
+                close=45200.00,
+                volume=1250.5
+            )
+        ],
+        count=1
+    )
+
+
+@app.post("/ohlcv", response_model=BackfillResponse)
+async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
+    """
+    Trigger a backfill job to fetch and store OHLCV data.
+
+    Request Body:
+    - start_timestamp: Unix timestamp (seconds) for data start
+    - end_timestamp: Unix timestamp (seconds) for data end
+    - exchange: Exchange identifier (binance, kraken, coinbase, etc.)
+    - symbol: Trading pair symbol (BTC/USDT, ETH/USDC, etc.)
+
+    Returns a job ID for tracking the backfill progress.
+    In production, this would queue a background task (Celery, RQ, etc.)
+    """
+    start_timestamp = datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00"))
+    end_timestamp = datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00"))
+
+    task = backfill_ohlcv_task.delay(
+        exchange=request.exchange,
+        symbol=request.symbol,
+        start_timestamp=start_timestamp,
+        end_timestamp=end_timestamp,
+        timeframe=request.timeframe,
+    )
+
+    return BackfillResponse(
+        status="backfill_queued",
+        job_id=task.id,
+        exchange=request.exchange,
+        symbol=request.symbol,
+        start_timestamp=int(start_timestamp),
+        end_timestamp=int(end_timestamp),
+        message="Backfill job has been queued for processing",
+    )
+
+@app.get("/ohlcv/jobs/{job_id}")
+async def get_job_status(job_id: str):
+    result = AsyncResult(job_id, app=celery)
+    return {
+        "job_id": job_id,
+        "state": result.state,
+        "meta": result.info if result.state != "PENDING" else None,
+    }
