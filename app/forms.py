@@ -35,6 +35,6 @@ class BackfillResponse(BaseModel):
     job_id: str
     exchange: str
     symbol: str
-    start_timestamp: int
-    end_timestamp: int
+    start_timestamp: datetime.datetime
+    end_timestamp: datetime.datetime
     message: str

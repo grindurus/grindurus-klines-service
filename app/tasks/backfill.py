@@ -9,7 +9,7 @@ def backfill_ohlcv_task(self, exchange: str, symbol: str, start_timestamp: datet
     self.update_state(state="RUNNING", meta={"exchange": exchange, "symbol": symbol})
 
     service = BackfillService(exchange)
-    service.run(symbol, start_timestamp, end_timestamp, timeframe)
+    service.run(start_timestamp, end_timestamp, symbol, timeframe)
 
     return {
         "exchange": exchange,

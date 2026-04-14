@@ -87,8 +87,8 @@ async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
         job_id=task.id,
         exchange=request.exchange,
         symbol=request.symbol,
-        start_timestamp=int(start_timestamp),
-        end_timestamp=int(end_timestamp),
+        start_timestamp=(start_timestamp),
+        end_timestamp=(end_timestamp),
         message="Backfill job has been queued for processing",
     )
 
