@@ -1,8 +1,9 @@
 from fastapi import FastAPI, Query
 
+from app.service import data_service
 from app.tasks.backfill import backfill_ohlcv_task
 from app.database.database import init_db
-from app.forms import OHLCVResponse, BackfillResponse, OHLCVCandle, BackfillRequest
+from app.forms import OHLCVResponse, BackfillResponse, BackfillRequest
 from datetime import datetime
 from celery.result import AsyncResult
 from app.celery_app import celery
@@ -21,6 +22,7 @@ async def get_ohlcv(
         end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
         exchange: str = Query(..., description="Exchange name (e.g., binance, kraken)"),
         symbol: str = Query(..., description="Trading symbol (e.g., BTC/USDT)"),
+        timeframe: str = Query(..., description="Timeframe (e.g., 1m, 5m, 15m, etc.)"),
 ) -> OHLCVResponse:
     """
     Retrieve OHLCV data for a given symbol and time range.
@@ -37,24 +39,13 @@ async def get_ohlcv(
     # Parse ISO 8601 timestamps
     start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
-    return OHLCVResponse(
-        status="success",
+
+    return data_service.get_data_between_dates(
+        start_date=start_dt,
+        end_date=end_dt,
         exchange=exchange,
         symbol=symbol,
-        start_timestamp=start_dt,
-        end_timestamp=end_dt,
-        data=[
-            OHLCVCandle(
-                timestamp=int(start_dt.timestamp()),
-                open=45000.00,
-                high=45500.00,
-                low=44800.00,
-                close=45200.00,
-                volume=1250.5
-            )
-        ],
-        count=1
-    )
+        timeframe=timeframe)
 
 
 @app.post("/ohlcv", response_model=BackfillResponse)

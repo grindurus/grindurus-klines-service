@@ -1,16 +1,20 @@
 import datetime
 
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, ConfigDict
+from typing import List, Optional, Any
+
+from app.database.models import OHLCV
+
 
 class OHLCVCandle(BaseModel):
-    timestamp: int
+    model_config = ConfigDict(from_attributes=True)
+
+    timestamp: datetime.datetime
     open: float
     high: float
     low: float
     close: float
     volume: float
-
 
 class OHLCVResponse(BaseModel):
     status: str
