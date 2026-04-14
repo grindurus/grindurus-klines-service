@@ -4,8 +4,6 @@ import os
 import datetime
 import time
 
-from fontTools.misc.plistlib import end_date
-
 from app.adapters.adapter import Adapter
 from app.database.database import db_session
 from app.database.models import OHLCV

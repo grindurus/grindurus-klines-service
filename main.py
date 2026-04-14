@@ -12,7 +12,7 @@ init_db()
 
 app = FastAPI()
 
-@app.get("/")
+@app.get("/health")
 async def root():
     return {"health": "OK"}
 
@@ -91,3 +91,9 @@ async def get_job_status(job_id: str):
         "state": result.state,
         "meta": result.info if result.state != "PENDING" else None,
     }
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
