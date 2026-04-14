@@ -4,6 +4,8 @@ import os
 import datetime
 import time
 
+from fontTools.misc.plistlib import end_date
+
 from app.adapters.adapter import Adapter
 from app.database.database import db_session
 from app.database.models import OHLCV
@@ -21,15 +23,45 @@ exchange = ccxt.binance({
     'enableRateLimit': True,  # helps prevent rate-limit issues
 })
 
+
+def get_candles_left(since_time, end_time, timeframe):
+    if isinstance(since_time, datetime.datetime) and isinstance(end_time, datetime.datetime):
+        duration_seconds = (end_time - since_time).total_seconds()
+    else:
+        # 2. Fallback if they are already millisecond timestamps (integers)
+        duration_seconds = (end_time - since_time) / 1000
+
+    # Map timeframes to seconds for easy division
+    seconds_map = {
+        "1s": 1,
+        "15s": 15,
+        "30s": 30,
+        "1m": 60,
+        "5m": 300,
+        "15m": 900,
+        "1h": 3600,
+        "4h": 14400,
+        "1d": 86400
+    }
+
+    divider = seconds_map.get(timeframe, 60)  # Default to 1m if not found
+    return int(duration_seconds / divider)
+
+
 class BinanceAdapter(Adapter):
     def backfill_ohlcv(self, start_date : datetime.datetime, end_date : datetime.datetime, symbol, timeframe):
         start_time = int(start_date.timestamp() * 1000)
         end_time = int(end_date.timestamp() * 1000)
 
         since = start_time
+        candles_left = get_candles_left(since, end_time, timeframe)
 
-        while since < end_time:
-            ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=1000)
+        while candles_left > 0:
+            limit = 1000
+            if candles_left < 1000:
+                limit = candles_left
+
+            ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, since=since, limit=limit)
             if not ohlcv:
                 break
 
@@ -52,5 +84,7 @@ class BinanceAdapter(Adapter):
                 session.bulk_save_objects(rows)
 
             since = ohlcv[-1][0] + 1
+            candles_left = get_candles_left(since, end_time, timeframe)
             time.sleep(exchange.rateLimit / 1000)
             print(f"Loaded {len(rows)} candles up to {since}")
+
