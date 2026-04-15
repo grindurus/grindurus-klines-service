@@ -62,14 +62,14 @@ async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
     Returns a job ID for tracking the backfill progress.
     In production, this would queue a background task (Celery, RQ, etc.)
     """
-    start_timestamp = datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00"))
-    end_timestamp = datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00"))
+    #start_timestamp = datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00"))
+    #end_timestamp = datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00"))
 
     task = backfill_ohlcv_task.delay(
         exchange=request.exchange,
         symbol=request.symbol,
-        start_timestamp=start_timestamp,
-        end_timestamp=end_timestamp,
+        start_timestamp=request.start_time,
+        end_timestamp=request.end_time,
         timeframe=request.timeframe,
     )
 
@@ -78,9 +78,9 @@ async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
         job_id=task.id,
         exchange=request.exchange,
         symbol=request.symbol,
-        start_timestamp=(start_timestamp),
-        end_timestamp=(end_timestamp),
-        message="Backfill job has been queued for processing",
+        start_timestamp=datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00")),
+        end_timestamp=datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00")),
+        message="Backfill job has been queued for processing"
     )
 
 @app.get("/ohlcv/jobs/{job_id}")

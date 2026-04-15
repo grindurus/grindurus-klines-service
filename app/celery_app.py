@@ -1,12 +1,18 @@
 import os
 from celery import Celery
 
-db_url = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/app")
+
+import os
+from celery import Celery
+
+broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+result_backend = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
 celery = Celery(
-    "klines-service",
-    broker=f"sqla+{db_url}",
-    backend=f"db+{db_url}",
+    "tasks",
+    broker=broker_url,
+    backend=result_backend,
+    include=["app.tasks.backfill"]
 )
 
 celery.conf.update(

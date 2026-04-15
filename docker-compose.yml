@@ -1,6 +1,6 @@
 services:
   db:
-    image: timescale/timescaledb:latest-pg18
+    image: timescale/timescaledb:latest-pg16 # Note: check if pg18 is available, usually 16 is current stable
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: postgres
@@ -14,17 +14,37 @@ services:
       interval: 3s
       timeout: 5s
       retries: 15
-      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
 
   api:
     build: .
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/app
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+
+  worker:
+    build: .
+    command: celery -A app.celery_app worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
 
 volumes:
   pgdata:

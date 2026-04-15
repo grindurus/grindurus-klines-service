@@ -10,4 +10,3 @@ class BackfillService:
 
     def run(self, start_timestamp: datetime, end_timestamp: datetime,symbol: str, timeframe: str):
         self.adapter.backfill_ohlcv(start_timestamp, end_timestamp, symbol, timeframe)
-        # Add any post-processing, validation, logging, etc. here
