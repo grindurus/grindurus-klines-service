@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Iterator
 
+from pathlib import Path
 from sqlalchemy import create_engine, text, Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -58,11 +59,10 @@ def init_indexes(connection):
         print(f"Index creation note: {e}")
 
 def init_functions(connection):
+    sql_path = Path(__file__).parent / "sql_scripts" / "find_gaps.sql"
     try:
-        with open('sql_scripts/find_gaps.sql', 'r') as f:
-            for statement in f.read().split(';'):
-                if statement.strip():
-                    connection.execute(text(statement))
+        sql = sql_path.read_text()
+        connection.exec_driver_sql(sql)
     except Exception as e:
         print(f"SQL function or type creation error: {e}")
 

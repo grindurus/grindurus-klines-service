@@ -1,3 +1,6 @@
+import csv
+import io
+
 from fastapi import FastAPI, Query
 
 from app.service import data_service
@@ -7,6 +10,7 @@ from app.forms import OHLCVResponse, BackfillResponse, BackfillRequest
 from datetime import datetime
 from celery.result import AsyncResult
 from app.celery_app import celery
+from fastapi.responses import StreamingResponse
 
 init_db()
 
@@ -16,36 +20,51 @@ app = FastAPI()
 async def root():
     return {"health": "OK"}
 
-@app.get("/ohlcv", response_model=OHLCVResponse)
+def results_to_csv(results) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["timestamp", "exchange", "symbol", "timeframe", "open", "high", "low", "close", "volume"])
+    for r in results:
+        writer.writerow([r.timestamp, r.exchange, r.symbol, r.timeframe, r.open, r.high, r.low, r.close, r.volume])
+    return output.getvalue()
+
+@app.get("/ohlcv")
 async def get_ohlcv(
         start_time: str = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
         end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
-        exchange: str = Query(..., description="Exchange name (e.g., binance, kraken)"),
-        symbol: str = Query(..., description="Trading symbol (e.g., BTC/USDT)"),
-        timeframe: str = Query(..., description="Timeframe (e.g., 1m, 5m, 15m, etc.)"),
-) -> OHLCVResponse:
-    """
-    Retrieve OHLCV data for a given symbol and time range.
-
-    Query Parameters:
-    - start_timestamp: ISO 8601 datetime string for data start (e.g., 2024-01-01T00:00:00Z)
-    - end_timestamp: ISO 8601 datetime string for data end (e.g., 2024-01-02T00:00:00Z)
-    - exchange: Exchange identifier (binance, kraken, coinbase, etc.)
-    - symbol: Trading pair symbol (BTC/USDT, ETH/USDC, etc.)
-
-    Returns OHLCV candle data for the requested period.
-    """
-
-    # Parse ISO 8601 timestamps
+        exchange: str = Query("binance", description="Exchange name"),
+        symbol: str = Query(..., description="Trading symbol"),
+        timeframe: str = Query("1m", description="Timeframe (1m, 1h, etc.)"),
+        response_format: str = Query("csv", description="Response format: json or csv"),
+):
     start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
 
-    return data_service.get_data_between_dates(
+    results = data_service.get_data_between_dates(
         start_date=start_dt,
         end_date=end_dt,
         exchange=exchange,
         symbol=symbol,
-        timeframe=timeframe)
+        timeframe=timeframe,
+    )
+
+    if response_format == "csv":
+        csv_data = results_to_csv(results)
+        return StreamingResponse(
+            io.StringIO(csv_data),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=ohlcv.csv"},
+        )
+
+    return OHLCVResponse(
+        status="success" if results else "failure",
+        exchange=exchange,
+        symbol=symbol,
+        start_timestamp=start_dt,
+        end_timestamp=end_dt,
+        data=results,
+        count=len(results),
+    )
 
 
 @app.post("/ohlcv", response_model=BackfillResponse)
@@ -62,9 +81,6 @@ async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
     Returns a job ID for tracking the backfill progress.
     In production, this would queue a background task (Celery, RQ, etc.)
     """
-    #start_timestamp = datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00"))
-    #end_timestamp = datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00"))
-
     task = backfill_ohlcv_task.delay(
         exchange=request.exchange,
         symbol=request.symbol,
