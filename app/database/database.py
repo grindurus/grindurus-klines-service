@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Iterator
 
 from sqlalchemy import create_engine, text, Engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 
 def _database_url() -> str:
@@ -27,24 +28,77 @@ def init_timescale_db(engine: Engine) -> None:
         # Enable TimescaleDB extension if not already enabled
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
 
-        try:
-            connection.execute(
-                text("SELECT create_hypertable('ohlcv', 'timestamp', if_not_exists => TRUE)")
-            )
-        except Exception as e:
-            # If it's already a hypertable or table doesn't exist, continue
-            print(f"Hypertable creation note: {e}")
+        init_hypertables(connection)
 
-        # Create composite index for common queries
-        try:
-            connection.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_ohlcv_exchange_symbol_timeframe_timestamp "
-                    "ON ohlcv (exchange, symbol, timeframe, timestamp DESC)"
-                )
+        init_indexes(connection)
+
+        init_functions(connection)
+
+
+
+def init_hypertables(connection):
+    try:
+        connection.execute(
+            text("SELECT create_hypertable('ohlcv', 'timestamp', if_not_exists => TRUE)")
+        )
+    except Exception as e:
+        # If it's already a hypertable or table doesn't exist, continue
+        print(f"Hypertable creation note: {e}")
+
+def init_indexes(connection):
+    # Create composite index for common queries
+    try:
+        connection.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_ohlcv_exchange_symbol_timeframe_timestamp "
+                "ON ohlcv (exchange, symbol, timeframe, timestamp DESC)"
             )
-        except Exception as e:
-            print(f"Index creation note: {e}")
+        )
+    except Exception as e:
+        print(f"Index creation note: {e}")
+
+def init_functions(connection):
+    try:
+        with open('sql_scripts/find_gaps.sql', 'r') as f:
+            for statement in f.read().split(';'):
+                if statement.strip():
+                    connection.execute(text(statement))
+    except Exception as e:
+        print(f"SQL function or type creation error: {e}")
+
+
+def find_gaps(
+    conn,
+    start_date: datetime,
+    end_date: datetime,
+    timeframe: str,
+    exchange: str,
+    symbol: str,
+    check_right: bool = True,
+) -> list[tuple[datetime, datetime]]:
+    """Call the find_ohlcv_gaps SQL function and return list of (gap_start, gap_end)."""
+    query = text("""
+        SELECT gap_start, gap_end
+        FROM find_ohlcv_gaps(
+            :start_date,
+            :end_date,
+            :timeframe,
+            :exchange,
+            :symbol,
+            :check_right
+        )
+    """)
+
+    rows = conn.execute(query, {
+            "start_date": start_date,
+            "end_date": end_date,
+            "timeframe": timeframe,
+            "exchange": exchange,
+            "symbol": symbol,
+            "check_right": check_right,
+        }).fetchall()
+
+    return [(row[0], row[1]) for row in rows]
 
 def get_db() -> Iterator[Session]:
     db = SessionLocal()
