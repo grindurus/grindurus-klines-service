@@ -56,7 +56,6 @@ BEGIN
     FOR i IN 2 .. array_length(v_raw_gaps, 1) LOOP
         v_curr := v_raw_gaps[i];
         v_prev := v_merged[array_length(v_merged, 1)];
-
         IF v_curr.gap_start <= v_prev.gap_end + v_interval THEN
             -- Extend previous gap
             v_merged[array_length(v_merged, 1)] :=
@@ -65,6 +64,15 @@ BEGIN
             v_merged := v_merged || v_curr;
         END IF;
     END LOOP;
+
+    IF v_merged IS NOT NULL THEN
+        FOR i IN 1 .. array_length(v_merged, 1) LOOP
+            -- Only return gaps that have a duration
+            IF v_merged[i].gap_start < v_merged[i].gap_end THEN
+                RETURN NEXT v_merged[i];
+            END IF;
+        END LOOP;
+    END IF;
 
     FOR i IN 1 .. array_length(v_merged, 1) LOOP
         RETURN NEXT v_merged[i];
@@ -170,7 +178,7 @@ LANGUAGE SQL IMMUTABLE
 AS $$
     SELECT EXTRACT(EPOCH FROM (p_end - p_start))::BIGINT
          / EXTRACT(EPOCH FROM p_interval)::BIGINT
-         + 1;
+    + 1;
 $$;
 
 

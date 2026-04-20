@@ -1,7 +1,7 @@
 import csv
 import io
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, HTTPException
 
 from app.service import data_service
 from app.tasks.backfill import backfill_ohlcv_task
@@ -48,23 +48,29 @@ async def get_ohlcv(
         timeframe=timeframe,
     )
 
-    if response_format == "csv":
-        csv_data = results_to_csv(results)
-        return StreamingResponse(
-            io.StringIO(csv_data),
-            media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=ohlcv.csv"},
-        )
+    status = "complete" if not gaps else "partial"
 
-    return OHLCVResponse(
-        status="complete" if not gaps else "partial",
-        exchange=exchange,
-        symbol=symbol,
-        start_timestamp=start_dt,
-        end_timestamp=end_dt,
-        data=results,
-        count=len(results),
-    )
+    if response_format == "csv":
+        if status == "complete":
+            csv_data = results_to_csv(results)
+            return StreamingResponse(
+                io.StringIO(csv_data),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=ohlcv.csv"},
+            )
+        else:
+            raise HTTPException(status_code=404,
+                                detail="Requested data not found in database. Backfill job queued, try again in few minutes.")
+    else :
+        return OHLCVResponse(
+            status=status,
+            exchange=exchange,
+            symbol=symbol,
+            start_timestamp=start_dt,
+            end_timestamp=end_dt,
+            data=results,
+            count=len(results),
+        )
 
 
 @app.post("/ohlcv", response_model=BackfillResponse)

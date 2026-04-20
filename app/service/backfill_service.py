@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from app.adapters.adapter_registry import get_adapter
-
+from app.database.database import find_gaps, db_session
 
 class BackfillService:
     def __init__(self, exchange: str):
@@ -9,4 +9,9 @@ class BackfillService:
         self.adapter = get_adapter(exchange)
 
     def run(self, start_timestamp: datetime, end_timestamp: datetime,symbol: str, timeframe: str):
-        self.adapter.backfill_ohlcv(start_timestamp, end_timestamp, symbol, timeframe)
+        with db_session() as session:
+            gaps = find_gaps(session, start_timestamp, end_timestamp, timeframe, self.exchange, symbol)
+            #Duplicate logic needed to ensure you don't write same candles twice.
+            if gaps:
+                for gap in gaps:
+                    self.adapter.backfill_ohlcv(gap[0], gap[1], symbol, timeframe)
