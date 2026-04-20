@@ -39,5 +39,5 @@ def get_data_between_dates(start_date: datetime, end_date: datetime, exchange: s
                 "volume": r.volume,
             }
             for r in rows
-        ]
+        ], [(g[0].isoformat(), g[1].isoformat()) for g in gaps]
 

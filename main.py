@@ -40,7 +40,7 @@ async def get_ohlcv(
     start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
 
-    results = data_service.get_data_between_dates(
+    results, gaps = data_service.get_data_between_dates(
         start_date=start_dt,
         end_date=end_dt,
         exchange=exchange,
@@ -57,7 +57,7 @@ async def get_ohlcv(
         )
 
     return OHLCVResponse(
-        status="success" if results else "failure",
+        status="complete" if not gaps else "partial",
         exchange=exchange,
         symbol=symbol,
         start_timestamp=start_dt,
@@ -68,7 +68,12 @@ async def get_ohlcv(
 
 
 @app.post("/ohlcv", response_model=BackfillResponse)
-async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
+async def backfill_ohlcv(start_time: str = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
+    end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
+    timeframe: str = Query("1m", description="Timeframe (1m, 1h, etc.)"),
+    exchange: str = Query("binance", description="Exchange name"),
+    symbol: str = Query(..., description="Trading symbol"),
+) -> BackfillResponse:
     """
     Trigger a backfill job to fetch and store OHLCV data.
 
@@ -81,21 +86,23 @@ async def backfill_ohlcv(request: BackfillRequest) -> BackfillResponse:
     Returns a job ID for tracking the backfill progress.
     In production, this would queue a background task (Celery, RQ, etc.)
     """
+    start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
+    end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
     task = backfill_ohlcv_task.delay(
-        exchange=request.exchange,
-        symbol=request.symbol,
-        start_timestamp=request.start_time,
-        end_timestamp=request.end_time,
-        timeframe=request.timeframe,
+        exchange=exchange,
+        symbol=symbol,
+        start_timestamp=start_dt,
+        end_timestamp=end_dt,
+        timeframe=timeframe,
     )
 
     return BackfillResponse(
         status="backfill_queued",
         job_id=task.id,
-        exchange=request.exchange,
-        symbol=request.symbol,
-        start_timestamp=datetime.fromisoformat(request.start_time.strip().replace("Z", "+00:00")),
-        end_timestamp=datetime.fromisoformat(request.end_time.strip().replace("Z", "+00:00")),
+        exchange=exchange,
+        symbol=symbol,
+        start_timestamp=start_dt,
+        end_timestamp=end_dt,
         message="Backfill job has been queued for processing"
     )
 
