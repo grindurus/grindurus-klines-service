@@ -37,7 +37,7 @@ services:
 
   worker:
     build: .
-    command: celery -A app.celery_app worker --loglevel=info
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=1
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
       - CELERY_BROKER_URL=redis://redis:6379/0

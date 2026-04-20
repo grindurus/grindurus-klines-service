@@ -18,7 +18,7 @@ def get_data_between_dates(start_date: datetime, end_date: datetime, exchange: s
                     timeframe=timeframe,
                 )
 
-        results = session.query(OHLCV).filter(
+        rows = session.query(OHLCV).filter(
             OHLCV.timestamp >= start_date,
             OHLCV.timestamp <= end_date,
             OHLCV.exchange == exchange,
@@ -26,5 +26,18 @@ def get_data_between_dates(start_date: datetime, end_date: datetime, exchange: s
             OHLCV.timeframe == timeframe,
         ).order_by(OHLCV.timestamp).all()
 
-        return results
+        return [
+            {
+                "timestamp": r.timestamp,
+                "exchange": r.exchange,
+                "symbol": r.symbol,
+                "timeframe": r.timeframe,
+                "open": r.open,
+                "high": r.high,
+                "low": r.low,
+                "close": r.close,
+                "volume": r.volume,
+            }
+            for r in rows
+        ]
 

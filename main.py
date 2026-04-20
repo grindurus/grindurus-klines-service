@@ -22,10 +22,10 @@ async def root():
 
 def results_to_csv(results) -> str:
     output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["timestamp", "exchange", "symbol", "timeframe", "open", "high", "low", "close", "volume"])
-    for r in results:
-        writer.writerow([r.timestamp, r.exchange, r.symbol, r.timeframe, r.open, r.high, r.low, r.close, r.volume])
+    fields = ["timestamp", "exchange", "symbol", "timeframe", "open", "high", "low", "close", "volume"]
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(results)
     return output.getvalue()
 
 @app.get("/ohlcv")
