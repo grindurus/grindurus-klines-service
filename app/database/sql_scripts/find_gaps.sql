@@ -73,10 +73,6 @@ BEGIN
             END IF;
         END LOOP;
     END IF;
-
-    FOR i IN 1 .. array_length(v_merged, 1) LOOP
-        RETURN NEXT v_merged[i];
-    END LOOP;
 END;
 $$;
 
