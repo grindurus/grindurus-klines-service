@@ -1,13 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
-from app.celery_app import celery
 from app.service.backfill_service import BackfillService
 
 
-@celery.task(bind=True, name="backfill_ohlcv")
-def backfill_ohlcv_task(self, exchange: str, symbol: str, start_timestamp: datetime, end_timestamp: datetime, timeframe: str):
-    self.update_state(state="RUNNING", meta={"exchange": exchange, "symbol": symbol})
-
+def backfill_ohlcv_task(exchange: str, symbol: str, start_timestamp: datetime, end_timestamp: datetime, timeframe: str):
     service = BackfillService(exchange)
     service.run(start_timestamp, end_timestamp, symbol, timeframe)
 

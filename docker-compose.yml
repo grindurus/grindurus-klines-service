@@ -15,11 +15,6 @@ services:
       timeout: 5s
       retries: 15
 
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-
   api:
     build: .
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
@@ -32,19 +27,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_started
-
-  worker:
-    build: .
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=1
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - db
-      - redis
 
 volumes:
   pgdata:

@@ -1,9 +1,8 @@
 import datetime
 
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Any
+from typing import List
 
-from app.database.models import OHLCV
 
 
 class OHLCVCandle(BaseModel):
@@ -36,7 +35,6 @@ class BackfillRequest(BaseModel):
 
 class BackfillResponse(BaseModel):
     status: str
-    job_id: str
     exchange: str
     symbol: str
     start_timestamp: datetime.datetime

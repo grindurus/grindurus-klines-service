@@ -4,12 +4,11 @@ import io
 from fastapi import FastAPI, Query, HTTPException
 
 from app.service import data_service
+from app.service.background_execution_service import background_execution
 from app.tasks.backfill import backfill_ohlcv_task
 from app.database.database import init_db
-from app.forms import OHLCVResponse, BackfillResponse, BackfillRequest
+from app.forms import OHLCVResponse, BackfillResponse
 from datetime import datetime
-from celery.result import AsyncResult
-from app.celery_app import celery
 from fastapi.responses import StreamingResponse
 
 init_db()
@@ -94,33 +93,23 @@ async def backfill_ohlcv(start_time: str = Query(..., description="Start timesta
     """
     start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
-    task = backfill_ohlcv_task.delay(
-        exchange=exchange,
-        symbol=symbol,
-        start_timestamp=start_dt,
-        end_timestamp=end_dt,
-        timeframe=timeframe,
-    )
+    background_execution.submit(
+        backfill_ohlcv_task,
+            exchange=exchange,
+            symbol=symbol,
+            start_timestamp=start_dt,
+            end_timestamp=end_dt,
+            timeframe=timeframe,
+        )
 
     return BackfillResponse(
         status="backfill_queued",
-        job_id=task.id,
         exchange=exchange,
         symbol=symbol,
         start_timestamp=start_dt,
         end_timestamp=end_dt,
         message="Backfill job has been queued for processing"
     )
-
-@app.get("/ohlcv/jobs/{job_id}")
-async def get_job_status(job_id: str):
-    result = AsyncResult(job_id, app=celery)
-    return {
-        "job_id": job_id,
-        "state": result.state,
-        "meta": result.info if result.state != "PENDING" else None,
-    }
-
 
 if __name__ == "__main__":
     import uvicorn

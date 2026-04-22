@@ -1,21 +1,23 @@
 from datetime import datetime
 
-from app.database.database import get_db, db_session, find_gaps
+from app.database.database import db_session, find_gaps
 from app.database.models import OHLCV
-from app.forms import OHLCVResponse
+from app.service.background_execution_service import background_execution
 from app.tasks.backfill import backfill_ohlcv_task
+
 
 def get_data_between_dates(start_date: datetime, end_date: datetime, exchange: str, symbol: str, timeframe: str):
     with db_session() as session:
         gaps = find_gaps(session.connection(), start_date, end_date,  timeframe, exchange, symbol)
         if len(gaps) > 0:
             for gap in gaps:
-                backfill_ohlcv_task.delay(
+                background_execution.submit(
+                    backfill_ohlcv_task,
                     exchange=exchange,
                     symbol=symbol,
                     start_timestamp=gap[0],
                     end_timestamp=gap[1],
-                    timeframe=timeframe,
+                    timeframe=timeframe
                 )
 
         rows = session.query(OHLCV).filter(
