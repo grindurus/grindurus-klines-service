@@ -40,6 +40,8 @@ services:
       - traefik.http.routers.api-http.rule=Host(`klines.grindurus.xyz`)
       - traefik.http.routers.api-http.entrypoints=web
       - traefik.http.routers.api-http.middlewares=redirect-to-https
+      - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
+      - traefik.http.middlewares.redirect-to-https.redirectScheme.permanent=true
 
       # --- prod HTTPS с сертификатом ---
       - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`)
