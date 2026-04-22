@@ -32,9 +32,21 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=grindurus
-      - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`) || Host(`klines.localhost`)
+      # --- localhost (HTTP only) ---
+      - traefik.http.routers.api-local.rule=Host(`klines.localhost`)
+      - traefik.http.routers.api-local.entrypoints=web
+
+      # --- prod HTTP → HTTPS redirect ---
+      - traefik.http.routers.api-http.rule=Host(`klines.grindurus.xyz`)
+      - traefik.http.routers.api-http.entrypoints=web
+      - traefik.http.routers.api-http.middlewares=redirect-to-https
+
+      # --- prod HTTPS с сертификатом ---
+      - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`)
       - traefik.http.routers.api.entrypoints=websecure
       - traefik.http.routers.api.tls.certresolver=le
+
+      # --- общий бэкенд ---
       - traefik.http.services.api.loadbalancer.server.port=8000
     networks:
       - grindurus
