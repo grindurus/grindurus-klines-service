@@ -28,7 +28,7 @@ def results_to_csv(results) -> str:
     writer.writerows(results)
     return output.getvalue()
 
-@app.get("/ohlcv")
+@app.get("/klines.csv")
 async def get_ohlcv(
         start_time: str = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
         end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
