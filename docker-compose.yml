@@ -32,7 +32,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=grindurus
-      - traefik.http.routers.api.rule=HostRegexp(`klines.*`)
+      - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`) || Host(`klines.localhost`)
       - traefik.http.routers.api.entrypoints=websecure
       - traefik.http.routers.api.tls.certresolver=le
       - traefik.http.services.api.loadbalancer.server.port=8000
