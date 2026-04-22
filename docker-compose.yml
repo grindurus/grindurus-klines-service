@@ -45,12 +45,12 @@ services:
       - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
       - traefik.http.middlewares.redirect-to-https.redirectScheme.permanent=true
 
-      # --- prod HTTPS с сертификатом ---
+      # --- prod HTTPS with certificate ---
       - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`)
       - traefik.http.routers.api.entrypoints=websecure
       - traefik.http.routers.api.tls.certresolver=le
 
-      # --- общий бэкенд ---
+      # --- general backend ---
       - traefik.http.services.api.loadbalancer.server.port=8000
     networks:
       - grindurus
