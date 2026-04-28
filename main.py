@@ -1,5 +1,6 @@
 import csv
 import io
+from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, HTTPException
 
@@ -8,7 +9,7 @@ from app.service.background_execution_service import background_execution
 from app.tasks.backfill import backfill_ohlcv_task
 from app.database.database import init_db
 from app.forms import OHLCVResponse, BackfillResponse
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
 from fastapi.responses import StreamingResponse
 
 init_db()
@@ -27,12 +28,51 @@ def results_to_csv(results) -> str:
     writer.writerows(results)
     return output.getvalue()
 
+
+@app.get("/klines", response_model=list[str])
+async def get_backtest_klines_links(
+        start_date: date = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
+        end_date: date = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
+        symbol: str = Query(..., description="Trading symbol"),
+        exchange: str = Query("binance", description="Exchange name"),
+        timeframe: str = Query("1m", description="Timeframe (1m, 1h, etc.)"),
+        domain: str = Query("grindurus.xyz", description="Base domain without protocol"),
+):
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date must be less than or equal to end_date")
+
+    links = []
+    current_day = start_date
+
+    while current_day < end_date:
+        day_start = datetime.combine(current_day, datetime.min.time()).replace(tzinfo=timezone.utc)
+        next_day = current_day + timedelta(days=1)
+        day_end = datetime.combine(next_day, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+        if day_end > datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc):
+            day_end = datetime.combine(end_date + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc)
+
+        params = urlencode(
+            {
+                "start_time": day_start.isoformat().replace("+00:00", "Z"),
+                "end_time": day_end.isoformat().replace("+00:00", "Z"),
+                "exchange": exchange,
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "response_format": "csv",
+            }
+        )
+        links.append(f"https://klines.{domain}/klines.csv?{params}")
+        current_day = next_day
+
+    return links
+
 @app.get("/klines.csv")
 async def get_ohlcv(
         start_time: str = Query(..., description="Start timestamp (ISO 8601 format, e.g., 2024-01-01T00:00:00Z)"),
         end_time: str = Query(..., description="End timestamp (ISO 8601 format, e.g., 2024-01-02T00:00:00Z)"),
-        exchange: str = Query("binance", description="Exchange name"),
         symbol: str = Query(..., description="Trading symbol"),
+        exchange: str = Query("binance", description="Exchange name"),
         timeframe: str = Query("1m", description="Timeframe (1m, 1h, etc.)"),
         response_format: str = Query("csv", description="Response format: json or csv"),
 ):

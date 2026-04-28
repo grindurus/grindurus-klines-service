@@ -3,7 +3,7 @@
 
 version: "3.9"
 
-name: klines-service
+name: klines-service-dev
 
 networks:
   grindurus:
@@ -12,7 +12,7 @@ networks:
 services:
   db:
     image: timescale/timescaledb:latest-pg18
-    container_name: klines-db
+    container_name: klines-db-dev
     restart: unless-stopped
     environment:
       POSTGRES_DB: app
@@ -27,16 +27,14 @@ services:
       interval: 3s
       timeout: 5s
       retries: 15
-    ports:
-      - "5433:5433"
 
   api:
     build: .
-    container_name: klines-api
+    container_name: klines-api-dev
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5433/app
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
     networks:
       - grindurus
     depends_on:
