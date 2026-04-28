@@ -56,7 +56,6 @@ services:
 
       # --- general backend ---
       - traefik.http.services.api.loadbalancer.server.port=8000
-      - traefik.http.services.api-localhost.loadbalancer.server.port=8000
 
 volumes:
   pgdata:
