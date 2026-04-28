@@ -74,7 +74,6 @@ async def get_ohlcv(
         symbol: str = Query(..., description="Trading symbol"),
         exchange: str = Query("binance", description="Exchange name"),
         timeframe: str = Query("1m", description="Timeframe (1m, 1h, etc.)"),
-        response_format: str = Query("csv", description="Response format: json or csv"),
 ):
     start_dt = datetime.fromisoformat(start_time.strip().replace("Z", "+00:00"))
     end_dt = datetime.fromisoformat(end_time.strip().replace("Z", "+00:00"))
@@ -89,27 +88,18 @@ async def get_ohlcv(
 
     status = "complete" if not gaps else "partial"
 
-    if response_format == "csv":
-        if status == "complete":
-            csv_data = results_to_csv(results)
-            return StreamingResponse(
-                io.StringIO(csv_data),
-                media_type="text/csv",
-                headers={"Content-Disposition": "attachment; filename=ohlcv.csv"},
-            )
-        else:
-            raise HTTPException(status_code=404,
-                                detail="Requested data not found in database. Backfill job queued, try again in few minutes.")
-    else :
-        return OHLCVResponse(
-            status=status,
-            exchange=exchange,
-            symbol=symbol,
-            start_timestamp=start_dt,
-            end_timestamp=end_dt,
-            data=results,
-            count=len(results),
+    if status == "complete":
+        csv_data = results_to_csv(results)
+        return StreamingResponse(
+            io.StringIO(csv_data),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=ohlcv.csv"},
         )
+
+    raise HTTPException(
+        status_code=404,
+        detail="Requested data not found in database. Backfill job queued, try again in few minutes.",
+    )
 
 
 @app.post("/ohlcv", response_model=BackfillResponse)
