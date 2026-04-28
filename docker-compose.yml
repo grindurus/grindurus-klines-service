@@ -5,9 +5,13 @@ version: "3.9"
 
 name: klines-service
 
+networks:
+  grindurus:
+    external: true
+
 services:
   db:
-    image: timescale/timescaledb:latest-pg16 # Note: check if pg18 is available, usually 16 is current stable
+    image: timescale/timescaledb:latest-pg18
     container_name: klines-db
     restart: unless-stopped
     environment:
@@ -28,39 +32,31 @@ services:
     build: .
     container_name: klines-api
     restart: unless-stopped
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=grindurus
-      # --- localhost (HTTP only) ---
-      - traefik.http.routers.api-local.rule=Host(`klines.localhost`)
-      - traefik.http.routers.api-local.entrypoints=web
-
-      # --- prod HTTP → HTTPS redirect ---
-      - traefik.http.routers.api-http.rule=Host(`klines.grindurus.xyz`)
-      - traefik.http.routers.api-http.entrypoints=web
-      - traefik.http.routers.api-http.middlewares=redirect-to-https
-      - traefik.http.middlewares.redirect-to-https.redirectScheme.scheme=https
-      - traefik.http.middlewares.redirect-to-https.redirectScheme.permanent=true
-
-      # --- prod HTTPS with certificate ---
-      - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`)
-      - traefik.http.routers.api.entrypoints=websecure
-      - traefik.http.routers.api.tls.certresolver=le
-
-      # --- general backend ---
-      - traefik.http.services.api.loadbalancer.server.port=8000
     networks:
       - grindurus
     depends_on:
       db:
         condition: service_healthy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=grindurus
+      
+      # --- localhost HTTPS ---
+      - traefik.http.routers.api-localhost.rule=Host(`klines.localhost`)
+      - traefik.http.routers.api-localhost.tls=true
+      - traefik.http.routers.api-localhost.entrypoints=websecure
+
+      # --- prod HTTPS ---
+      - traefik.http.routers.api.rule=Host(`klines.grindurus.xyz`)
+      - traefik.http.routers.api.tls.certresolver=le
+      - traefik.http.routers.api.entrypoints=websecure
+
+      # --- general backend ---
+      - traefik.http.services.api.loadbalancer.server.port=8000
+      - traefik.http.services.api-localhost.loadbalancer.server.port=8000
 
 volumes:
   pgdata:
-
-networks:
-  grindurus:
-    external: true

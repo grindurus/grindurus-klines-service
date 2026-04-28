@@ -1,0 +1,51 @@
+# docker-compose.yml
+# $ docker compose -f docker-compose.dev.yml up -d --build
+
+version: "3.9"
+
+name: klines-service
+
+networks:
+  grindurus:
+    external: true
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg18
+    container_name: klines-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/home/postgres/data
+    networks:
+      - grindurus
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+    ports:
+      - "5433:5433"
+
+  api:
+    build: .
+    container_name: klines-api
+    restart: unless-stopped
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5433/app
+    networks:
+      - grindurus
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/app
+
+volumes:
+  pgdata:
