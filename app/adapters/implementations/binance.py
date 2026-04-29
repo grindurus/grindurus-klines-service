@@ -89,8 +89,11 @@ class BinanceAdapter(Adapter):
 
     def get_available_symbols(self):
         markets = exchange.fetch_markets()
-        symbols = {'base': set(), 'quote': set()}
+        symbols = {}
         for market in markets:
-            symbols['base'].add(market["base"])
-            symbols['quote'].add(market["quote"])
+            if not symbols.get(market["base"]):
+                symbols[market["base"]] = set()
+
+            symbols[market["base"]].add(market["quote"])
+
         return symbols

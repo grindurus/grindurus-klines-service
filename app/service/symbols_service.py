@@ -12,6 +12,7 @@ def get_symbols(exchange: str):
     # If it's not in cache OR it has expired, fetch new data
     if not data_present_in_cache or expired(data_present_in_cache):
         exchange_adapter = adapter_registry.get_adapter(exchange)
+
         symbols = exchange_adapter.get_available_symbols()
 
         symbols_cache[exchange] = {
