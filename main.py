@@ -4,11 +4,11 @@ from urllib.parse import urlencode
 
 from fastapi import FastAPI, Query, HTTPException
 
-from app.service import data_service
+from app.service import data_service, symbols_service
 from app.service.background_execution_service import background_execution
 from app.tasks.backfill import backfill_ohlcv_task
 from app.database.database import init_db
-from app.forms import OHLCVResponse, BackfillResponse
+from app.forms import BackfillResponse
 from datetime import datetime, date, timedelta, timezone
 from fastapi.responses import StreamingResponse
 
@@ -140,6 +140,11 @@ async def backfill_ohlcv(start_time: str = Query(..., description="Start timesta
         end_timestamp=end_dt,
         message="Backfill job has been queued for processing"
     )
+
+@app.get("/symbols")
+async def get_symbols(exchange: str = Query("binance", description="Binance, kraken, coinbase, etc.")):
+    return symbols_service.get_symbols(exchange)
+
 
 if __name__ == "__main__":
     import uvicorn

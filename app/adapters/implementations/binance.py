@@ -86,3 +86,11 @@ class BinanceAdapter(Adapter):
             time.sleep(exchange.rateLimit / 1000)
             print(f"Loaded {len(rows)} candles up to {since}")
 
+
+    def get_available_symbols(self):
+        markets = exchange.fetch_markets()
+        symbols = set()
+        for market in markets:
+            symbols.add(market["base"])
+            symbols.add(market["quote"])
+        return symbols
