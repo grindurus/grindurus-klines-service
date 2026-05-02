@@ -29,12 +29,104 @@ def init_timescale_db(engine: Engine) -> None:
         # Enable TimescaleDB extension if not already enabled
         connection.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
 
+        migrate_legacy_ohlcv_timestamp_split(connection)
+
         init_hypertables(connection)
 
         init_indexes(connection)
 
         init_functions(connection)
 
+
+def migrate_legacy_ohlcv_timestamp_split(connection) -> None:
+    """Upgrade pre-split schema: single timestamptz ``timestamp`` -> ``timestamp_human`` + bigint ``timestamp``."""
+    ohlcv_exists = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'ohlcv'
+            )
+            """
+        )
+    ).scalar()
+    if not ohlcv_exists:
+        return
+
+    has_human = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'ohlcv'
+                  AND column_name = 'timestamp_human'
+            )
+            """
+        )
+    ).scalar()
+    if has_human:
+        return
+
+    row = connection.execute(
+        text(
+            """
+            SELECT data_type
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'ohlcv'
+              AND column_name = 'timestamp'
+            """
+        )
+    ).fetchone()
+    if not row:
+        return
+
+    if row[0] not in ("timestamp with time zone", "timestamp without time zone"):
+        return
+
+    connection.execute(text("ALTER TABLE ohlcv ADD COLUMN IF NOT EXISTS _migrate_open_ms BIGINT"))
+    connection.execute(
+        text(
+            """
+            UPDATE ohlcv
+            SET _migrate_open_ms = (EXTRACT(EPOCH FROM "timestamp") * 1000)::bigint
+            WHERE _migrate_open_ms IS NULL
+            """
+        )
+    )
+
+    # RENAME preserves the primary key on the time column (no DROP needed — safer on Timescale hypertables).
+    connection.execute(
+        text('ALTER TABLE ohlcv RENAME COLUMN "timestamp" TO timestamp_human')
+    )
+    connection.execute(
+        text('ALTER TABLE ohlcv RENAME COLUMN _migrate_open_ms TO "timestamp"')
+    )
+    connection.execute(text('ALTER TABLE ohlcv ALTER COLUMN "timestamp" SET NOT NULL'))
+
+    uq_exists = connection.execute(
+        text(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_constraint c
+                JOIN pg_class t ON c.conrelid = t.oid
+                JOIN pg_namespace n ON t.relnamespace = n.oid
+                WHERE n.nspname = 'public' AND t.relname = 'ohlcv'
+                  AND c.conname = 'uq_ohlcv_timestamp_candle'
+            )
+            """
+        )
+    ).scalar()
+    if not uq_exists:
+        connection.execute(
+            text(
+                """
+                ALTER TABLE ohlcv
+                ADD CONSTRAINT uq_ohlcv_timestamp_candle
+                UNIQUE ("timestamp", exchange, symbol, timeframe)
+                """
+            )
+        )
 
 
 def init_hypertables(connection):
