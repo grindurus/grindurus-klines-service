@@ -22,7 +22,18 @@ async def root():
 
 def results_to_csv(results) -> str:
     output = io.StringIO()
-    fields = ["timestamp", "exchange", "symbol", "timeframe", "open", "high", "low", "close", "volume"]
+    fields = [
+        "timestamp",
+        "timestamp_human",
+        "exchange",
+        "symbol",
+        "timeframe",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume",
+    ]
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
     writer.writerows(results)

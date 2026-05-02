@@ -40,7 +40,9 @@ def init_timescale_db(engine: Engine) -> None:
 def init_hypertables(connection):
     try:
         connection.execute(
-            text("SELECT create_hypertable('ohlcv', 'timestamp', if_not_exists => TRUE)")
+            text(
+                "SELECT create_hypertable('ohlcv', 'timestamp_human', if_not_exists => TRUE)"
+            )
         )
     except Exception as e:
         # If it's already a hypertable or table doesn't exist, continue
@@ -51,8 +53,8 @@ def init_indexes(connection):
     try:
         connection.execute(
             text(
-                "CREATE INDEX IF NOT EXISTS idx_ohlcv_exchange_symbol_timeframe_timestamp "
-                "ON ohlcv (exchange, symbol, timeframe, timestamp DESC)"
+                "CREATE INDEX IF NOT EXISTS idx_ohlcv_exchange_symbol_timeframe_timestamp_human "
+                "ON ohlcv (exchange, symbol, timeframe, timestamp_human DESC)"
             )
         )
     except Exception as e:

@@ -65,7 +65,10 @@ class BinanceAdapter(Adapter):
 
             rows = [
                 OHLCV(
-                    timestamp=datetime.datetime.fromtimestamp(candle[0] / 1000, tz=datetime.timezone.utc),
+                    timestamp=int(candle[0]),
+                    timestamp_human=datetime.datetime.fromtimestamp(
+                        candle[0] / 1000, tz=datetime.timezone.utc
+                    ),
                     exchange="binance",
                     symbol=symbol,
                     timeframe=timeframe,

@@ -34,14 +34,14 @@ BEGIN
         p_end_date,
         v_interval,
         ARRAY(
-            SELECT timestamp
+            SELECT timestamp_human
             FROM ohlcv
             WHERE exchange  = p_exchange
               AND symbol    = p_symbol
               AND timeframe = p_timeframe
-              AND timestamp >= p_start_date
-              AND timestamp <= p_end_date
-            ORDER BY timestamp
+              AND timestamp_human >= p_start_date
+              AND timestamp_human <= p_end_date
+            ORDER BY timestamp_human
         ),
         p_check_right
     ) INTO v_raw_gaps;

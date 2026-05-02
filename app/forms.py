@@ -8,7 +8,8 @@ from typing import List
 class OHLCVCandle(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    timestamp: datetime.datetime
+    timestamp: int
+    timestamp_human: datetime.datetime
     open: float
     high: float
     low: float
