@@ -16,12 +16,12 @@ def find_gaps(
     query = text("""
         SELECT gap_start, gap_end
         FROM find_ohlcv_gaps(
-            :start_date,
-            :end_date,
-            :timeframe,
-            :exchange,
-            :symbol,
-            :check_right
+            CAST(:start_date AS TIMESTAMPTZ),
+            CAST(:end_date AS TIMESTAMPTZ),
+            CAST(:timeframe AS TEXT),
+            CAST(:exchange AS TEXT),
+            CAST(:symbol AS TEXT),
+            CAST(:check_right AS BOOLEAN)
         )
     """)
 

@@ -171,15 +171,16 @@ def find_gaps(
     check_right: bool = True,
 ) -> list[tuple[datetime, datetime]]:
     """Call the find_ohlcv_gaps SQL function and return list of (gap_start, gap_end)."""
+    # Explicit casts: bound string params are typed "unknown" in PG and won't match TEXT args.
     query = text("""
         SELECT gap_start, gap_end
         FROM find_ohlcv_gaps(
-            :start_date,
-            :end_date,
-            :timeframe,
-            :exchange,
-            :symbol,
-            :check_right
+            CAST(:start_date AS TIMESTAMPTZ),
+            CAST(:end_date AS TIMESTAMPTZ),
+            CAST(:timeframe AS TEXT),
+            CAST(:exchange AS TEXT),
+            CAST(:symbol AS TEXT),
+            CAST(:check_right AS BOOLEAN)
         )
     """)
 
