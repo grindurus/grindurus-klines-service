@@ -27,6 +27,17 @@ services:
       interval: 3s
       timeout: 5s
       retries: 15
+    # TCP via Traefik (not HTTP Host): pgAdmin → host=server IP or DNS name, port=15432, database app.
+    # A name like db.klines… only helps if its A record points at this server; without TLS on Postgres,
+    # Traefik cannot distinguish subdomains on a single TCP port.
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=grindurus
+      
+      - traefik.tcp.routers.klines-db.rule=HostSNI(`*`)
+      - traefik.tcp.routers.klines-db.entrypoints=pg-klines
+      - traefik.tcp.routers.klines-db.service=klines-db
+      - traefik.tcp.services.klines-db.loadbalancer.server.port=5432
 
   api:
     build: .
