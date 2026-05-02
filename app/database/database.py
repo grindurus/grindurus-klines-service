@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Iterator
@@ -35,7 +36,9 @@ def init_timescale_db(engine: Engine) -> None:
 
         init_indexes(connection)
 
-        init_functions(connection)
+    # PL/pgSQL installs must not share one big transaction with the rest: a failure would roll back
+    # all CREATE FUNCTION steps. psycopg2 also used to hide partial applies — use AUTOCOMMIT per statement.
+    init_functions(engine)
 
 
 def migrate_legacy_ohlcv_timestamp_split(connection) -> None:
@@ -152,13 +155,58 @@ def init_indexes(connection):
     except Exception as e:
         print(f"Index creation note: {e}")
 
-def init_functions(connection):
+
+def _iter_find_gaps_sql_statements(raw: str) -> Iterator[str]:
+    """Yield executable chunks from find_gaps.sql.
+
+    psycopg2 extended protocol runs only the *first* SQL statement per execute(),
+    so a multi-statement file leaves CREATE FUNCTION definitions never applied.
+    """
+    raw = raw.lstrip("\ufeff").replace("\r\n", "\n")
+    cut = raw.find("\n-- ============================================================")
+    if cut != -1:
+        raw = raw[:cut].rstrip()
+
+    m = re.search(r"DO \$\$[\s\S]*?END \$\$;", raw)
+    if m:
+        yield m.group(0).strip()
+
+    starts = [m.start() for m in re.finditer(r"^CREATE OR REPLACE FUNCTION", raw, re.MULTILINE)]
+    for i, start in enumerate(starts):
+        end = starts[i + 1] if i + 1 < len(starts) else len(raw)
+        chunk = raw[start:end].strip()
+        if chunk:
+            yield chunk
+
+
+def init_functions(engine: Engine) -> None:
     sql_path = Path(__file__).parent / "sql_scripts" / "find_gaps.sql"
-    try:
-        sql = sql_path.read_text()
-        connection.exec_driver_sql(sql)
-    except Exception as e:
-        print(f"SQL function or type creation error: {e}")
+    if not sql_path.is_file():
+        raise FileNotFoundError(f"Missing SQL bundle: {sql_path}")
+    sql = sql_path.read_text(encoding="utf-8")
+
+    with engine.connect() as conn:
+        conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+        for stmt in _iter_find_gaps_sql_statements(sql):
+            if stmt.strip():
+                conn.exec_driver_sql(stmt)
+        ok = conn.execute(
+            text(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_proc p
+                    JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname = 'public'
+                      AND p.proname = 'find_ohlcv_gaps'
+                )
+                """
+            )
+        ).scalar()
+    if not ok:
+        raise RuntimeError(
+            "find_ohlcv_gaps was not created; check container logs and sql_scripts/find_gaps.sql"
+        )
 
 
 def find_gaps(
