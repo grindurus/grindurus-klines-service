@@ -17,7 +17,7 @@ services:
     environment:
       POSTGRES_DB: app
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     volumes:
       - pgdata:/home/postgres/data
     networks:
@@ -33,7 +33,7 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=grindurus
-      
+
       - traefik.tcp.routers.klines-db.rule=HostSNI(`*`)
       - traefik.tcp.routers.klines-db.entrypoints=pg-klines
       - traefik.tcp.routers.klines-db.service=klines-db
@@ -45,7 +45,7 @@ services:
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/app
     networks:
       - grindurus
     depends_on:
