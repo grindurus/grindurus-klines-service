@@ -12,11 +12,14 @@ jobs:
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          # Listed in `envs` below so the SSH session receives them (interactive shell export on the server does not apply here).
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         with:
           host: ${{ secrets.SERVER_HOST }} # server ipv4 address
           username: ${{ secrets.SERVER_USER }} # root
-          key: ${{ secrets.SSH_KEY }} # ssh private key 
-          postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+          key: ${{ secrets.SSH_KEY }} # ssh private key
+          envs: POSTGRES_PASSWORD
           script: |
             cd /opt/grindurus-klines-service
             git pull
