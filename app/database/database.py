@@ -12,9 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 
 def _database_url() -> str:
-    url = os.getenv("DATABASE_URL")
-    print(url)
-    return url
+    return os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/app")
 
 
 engine = create_engine(_database_url())

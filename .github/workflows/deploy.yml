@@ -16,6 +16,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }} # server ipv4 address
           username: ${{ secrets.SERVER_USER }} # root
           key: ${{ secrets.SSH_KEY }} # ssh private key 
+          postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
           script: |
             cd /opt/grindurus-klines-service
             git pull
