@@ -20,4 +20,4 @@ jobs:
           script: |
             cd /opt/grindurus-klines-service
             git pull
-            docker compose up -d --build
+            ./1_run.sh
