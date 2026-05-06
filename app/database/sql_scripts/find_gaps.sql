@@ -4,6 +4,30 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+CREATE OR REPLACE FUNCTION _bisect_right(
+    p_arr       TIMESTAMPTZ[],
+    p_target    TIMESTAMPTZ
+)
+RETURNS INT
+LANGUAGE plpgsql IMMUTABLE
+AS $$
+DECLARE
+    lo INT := 1;
+    hi INT := array_length(p_arr, 1);
+    mid INT;
+BEGIN
+    IF hi IS NULL THEN RETURN 0; END IF;
+    WHILE lo <= hi LOOP
+        mid := (lo + hi) / 2;
+        IF p_arr[mid] <= p_target THEN
+            lo := mid + 1;
+        ELSE
+            hi := mid - 1;
+        END IF;
+    END LOOP;
+    RETURN hi;  -- last index <= target
+END;
+$$;
 
 -- Main entry point: finds gaps and merges adjacent ones
 CREATE OR REPLACE FUNCTION find_ohlcv_gaps(
@@ -34,14 +58,14 @@ BEGIN
         p_end_date,
         v_interval,
         ARRAY(
-            SELECT timestamp_human
+            SELECT timestamp
             FROM ohlcv
             WHERE exchange  = p_exchange
               AND symbol    = p_symbol
               AND timeframe = p_timeframe
-              AND timestamp_human >= p_start_date
-              AND timestamp_human <= p_end_date
-            ORDER BY timestamp_human
+              AND timestamp >= p_start_date
+              AND timestamp <= p_end_date
+            ORDER BY timestamp
         ),
         p_check_right
     ) INTO v_raw_gaps;
@@ -93,15 +117,26 @@ DECLARE
     v_expected_count BIGINT;
     v_present_count  INT;
     v_half_ts        TIMESTAMPTZ;
+    v_split_idx      BIGINT;
     v_half_offset    BIGINT;
     v_left           TIMESTAMPTZ[];
     v_right          TIMESTAMPTZ[];
 BEGIN
     v_expected_count := _count_intervals(p_start, p_end, p_interval);
-    v_present_count  := array_length(p_timestamps, 1);
+    v_present_count  := COALESCE(array_length(p_timestamps, 1), 0);
 
-    IF v_present_count IS NULL THEN
-        v_present_count := 0;
+    -- Base case: invalid range
+    IF p_start > p_end THEN
+        RETURN ARRAY[]::gap_range[];
+    END IF;
+
+    -- Base case: single slot
+    IF v_expected_count <= 1 THEN
+        IF v_present_count = 0 THEN
+            RETURN ARRAY[ROW(p_start, p_end)::gap_range];
+        ELSE
+            RETURN ARRAY[]::gap_range[];
+        END IF;
     END IF;
 
     -- Base case: fully filled
@@ -125,18 +160,23 @@ BEGIN
     v_half_offset := GREATEST(1, LEAST(v_half_offset, v_expected_count - 1));
     v_half_ts     := p_start + (v_half_offset - 1) * p_interval;
 
-    -- Split timestamps into left (<= half) and right (> half)
-    SELECT
-        COALESCE(array_agg(t ORDER BY t) FILTER (WHERE t <= v_half_ts), ARRAY[]::TIMESTAMPTZ[]),
-        COALESCE(array_agg(t ORDER BY t) FILTER (WHERE t >  v_half_ts), ARRAY[]::TIMESTAMPTZ[])
-    INTO v_left, v_right
-    FROM unnest(p_timestamps) AS t;
+    -- Safety: if split didn't actually divide the range, fall back to midpoint
+    IF v_half_ts <= p_start THEN
+        v_half_ts := p_start + ((v_expected_count / 2) - 1) * p_interval;
+    END IF;
+    IF v_half_ts >= p_end THEN
+        v_half_ts := p_start + ((v_expected_count / 2) - 1) * p_interval;
+    END IF;
+
+    v_split_idx := _bisect_right(p_timestamps, v_half_ts);
+
+    v_left  := p_timestamps[1 : v_split_idx];
+    v_right := p_timestamps[v_split_idx + 1 : array_length(p_timestamps, 1)];
 
     RETURN _find_gaps_recursive(p_start, v_half_ts, p_interval, v_left,  NOT p_check_right)
         || _find_gaps_recursive(v_half_ts + p_interval, p_end, p_interval, v_right, NOT p_check_right);
 END;
 $$;
-
 
 -- Convert timeframe string like '1h', '5m', '1s', '1d' to INTERVAL
 CREATE OR REPLACE FUNCTION _timeframe_to_interval(p_timeframe TEXT)
