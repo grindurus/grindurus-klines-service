@@ -10,7 +10,7 @@ networks:
     external: true
 
 services:
-  db:
+  klines-db:
     image: timescale/timescaledb:latest-pg18
     container_name: klines-db
     restart: unless-stopped
@@ -39,17 +39,17 @@ services:
       - traefik.tcp.routers.klines-db.service=klines-db
       - traefik.tcp.services.klines-db.loadbalancer.server.port=5432
 
-  api:
+  klines-api:
     build: .
     container_name: klines-api
     restart: unless-stopped
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/app
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@klines-db:5432/app
     networks:
       - grindurus
     depends_on:
-      db:
+      klines-db:
         condition: service_healthy
     labels:
       - traefik.enable=true
